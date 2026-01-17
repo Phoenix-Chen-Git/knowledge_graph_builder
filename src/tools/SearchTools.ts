@@ -1,4 +1,5 @@
 import { getStandaloneQuestion } from "@/chainUtils";
+import { requestUrl } from "obsidian";
 import { TEXT_WEIGHT } from "@/constants";
 import { BrevilabsClient } from "@/LLMProviders/brevilabsClient";
 import { logInfo } from "@/logger";
@@ -274,23 +275,102 @@ const webSearchSchema = z.object({
     .describe("Previous conversation turns"),
 });
 
+// Helper for fallback web search using DuckDuckGo HTML
+async function performFallbackSearch(
+  query: string
+): Promise<{ content: string; citations: string[] }> {
+  try {
+    const response = await requestUrl({
+      url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+      method: "GET",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+    });
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(response.text, "text/html");
+
+    const results = Array.from(doc.querySelectorAll(".result")).slice(0, 5);
+    if (results.length === 0) {
+      return { content: "No search results found.", citations: [] };
+    }
+
+    const processedResults: string[] = [];
+    const citations: string[] = [];
+
+    results.forEach((result) => {
+      const titleEl = result.querySelector(".result__a");
+      const snippetEl = result.querySelector(".result__snippet");
+      // const urlEl = result.querySelector(".result__url"); // Unused
+
+      if (titleEl && snippetEl) {
+        const title = titleEl.textContent?.trim();
+        const snippet = snippetEl.textContent?.trim();
+        // Extract URL from href which is usually like /l/?kh=-1&uddg=https%3A%2F%2Fexample.com
+        const rawHref = (titleEl as HTMLAnchorElement).getAttribute("href") || "";
+        let url = rawHref;
+
+        try {
+          const urlObj = new URL(rawHref, "https://duckduckgo.com");
+          const uddg = urlObj.searchParams.get("uddg");
+          if (uddg) {
+            url = decodeURIComponent(uddg);
+          }
+        } catch {
+          // ignore URL parsing error, use raw
+        }
+
+        if (title && snippet) {
+          processedResults.push(`Title: ${title}\nURL: ${url}\nSnippet: ${snippet}`);
+          citations.push(url);
+        }
+      }
+    });
+
+    return {
+      content: processedResults.join("\n\n---\n\n"),
+      citations: deduplicateSources(citations.map((c) => ({ title: c, path: c, score: 1 }))).map(
+        (c) => c.path
+      ),
+    };
+  } catch (error) {
+    console.error("Fallback search failed", error);
+    return { content: `Search failed: ${error}`, citations: [] };
+  }
+}
+
 // Add new web search tool
 const webSearchTool = createTool({
   name: "webSearch",
   description: "Search the web for information",
   schema: webSearchSchema,
-  isPlusOnly: true,
+  // MODIFIED: Removed isPlusOnly to allow all users
+  isPlusOnly: false,
   handler: async ({ query, chatHistory }) => {
     try {
       // Get standalone question considering chat history
       const standaloneQuestion = await getStandaloneQuestion(query, chatHistory);
 
-      const response = await BrevilabsClient.getInstance().webSearch(standaloneQuestion);
-      const citations = response.response.citations || [];
+      let webContent = "";
+      let citations: string[] = [];
+
+      try {
+        // Try the official client first (will fail for non-Plus users)
+        const response = await BrevilabsClient.getInstance().webSearch(standaloneQuestion);
+        webContent = response.response.choices[0].message.content;
+        citations = response.response.citations || [];
+      } catch (clientError) {
+        // Fallback to local scraping
+        logInfo("Official web search failed, falling back to local scraper:", clientError);
+        const fallbackResult = await performFallbackSearch(standaloneQuestion);
+        webContent = fallbackResult.content;
+        citations = fallbackResult.citations;
+      }
 
       // Return structured JSON response for consistency with other tools
       // Format as an array of results like localSearch does
-      const webContent = response.response.choices[0].message.content;
       const formattedResults = [
         {
           type: "web_search",

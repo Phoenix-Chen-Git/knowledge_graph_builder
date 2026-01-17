@@ -14,59 +14,49 @@ interface NotePrompt {
 }
 
 const SUGGESTED_PROMPTS: Record<string, NotePrompt> = {
-  activeNote: {
-    title: "Active Note Insights",
+  graphAnalysis: {
+    title: "Graph Analysis",
     prompts: [
-      `Provide three follow-up questions worded as if I'm asking you based on {activeNote}?`,
-      `What key questions does {activeNote} answer?`,
-      `Give me a quick recap of {activeNote} in two sentences.`,
+      `Analyze the graph position and connections of {activeNote}`,
+      `What are the most connected notes (hubs) in my vault?`,
+      `Find all orphaned notes that have no connections`,
+      `Give me an overview of my knowledge graph structure`,
     ],
   },
-  quoteNote: {
-    title: "Note Link Chat",
+  findConnections: {
+    title: "Find Connections",
     prompts: [
-      `Based on [[<note>]], what improvements should we focus on next?`,
-      `Summarize the key points from [[<note>]].`,
-      `Summarize the recent updates from [[<note>]].`,
-      `Roast my writing in [[<note>]] and give concrete actionable feedback`,
+      `Find notes similar to {activeNote}`,
+      `Suggest new connections for {activeNote}`,
+      `What notes should [[<note>]] be linked to?`,
+      `Find notes related to <topic> in my vault`,
     ],
   },
-  fun: {
-    title: "Test LLM",
+  enrichNotes: {
+    title: "Enrich Notes",
     prompts: [
-      `9.11 and 9.8, which is bigger?`,
-      `What's the longest river in the world?`,
-      `If a lead ball and a feather are dropped simultaneously from the same height, which will reach the ground first?`,
+      `Suggest tags and links for {activeNote}`,
+      `Help me enrich [[<note>]] with better metadata`,
+      `What tags should I add to {activeNote}?`,
+      `Review my tagging strategy and suggest improvements`,
     ],
   },
-  qaVault: {
-    title: "Vault Q&A",
+  graphInsights: {
+    title: "Graph Insights",
     prompts: [
-      `What insights can I gather about <topic> from my notes?`,
-      `Explain <concept> based on my stored notes.`,
-      `Highlight important details on <topic> from my notes.`,
-      `Based on my notes on <topic>, what is the question that I should be asking, but am not?`,
-    ],
-  },
-  copilotPlus: {
-    title: "Copilot Plus",
-    prompts: [
-      `Give me a recap of last week @vault`,
-      `What are the key takeaways from my notes on <topic> @vault`,
-      `Summarize <url> in under 10 bullet points`,
-      `Summarize <youtube_video_url>`,
-      `@websearch what are most recent updates in the AI industry`,
-      `What are the key insights from this paper <arxiv_url>`,
-      `What new methods are proposed in this paper [[<note_with_embedded_pdf>]]`,
+      `What are the main clusters in my knowledge graph?`,
+      `Which notes act as bridges between different topics?`,
+      `Analyze the health of my knowledge graph`,
+      `What topics are well-documented vs under-documented?`,
     ],
   },
 };
 
 const PROMPT_KEYS: Record<ChainType, Array<keyof typeof SUGGESTED_PROMPTS>> = {
-  [ChainType.LLM_CHAIN]: ["activeNote", "quoteNote", "fun"],
-  [ChainType.VAULT_QA_CHAIN]: ["qaVault", "qaVault", "quoteNote"],
-  [ChainType.COPILOT_PLUS_CHAIN]: ["copilotPlus", "copilotPlus", "copilotPlus"],
-  [ChainType.PROJECT_CHAIN]: ["copilotPlus", "copilotPlus", "copilotPlus"],
+  [ChainType.LLM_CHAIN]: ["graphAnalysis", "findConnections", "enrichNotes"],
+  [ChainType.VAULT_QA_CHAIN]: ["graphInsights", "findConnections", "enrichNotes"],
+  [ChainType.COPILOT_PLUS_CHAIN]: ["graphAnalysis", "graphInsights", "enrichNotes"],
+  [ChainType.PROJECT_CHAIN]: ["graphAnalysis", "findConnections", "graphInsights"],
 };
 
 function getRandomPrompt(chainType: ChainType = ChainType.LLM_CHAIN) {

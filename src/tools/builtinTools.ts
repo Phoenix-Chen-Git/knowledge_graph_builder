@@ -1,6 +1,6 @@
 import { getSettings } from "@/settings/model";
 import { Vault } from "obsidian";
-import { replaceInFileTool, writeToFileTool } from "./ComposerTools";
+import { replaceInFileTool, writeToFileTool, deleteNoteTool } from "./ComposerTools";
 import { createGetFileTreeTool } from "./FileTreeTools";
 import { updateMemoryTool } from "./memoryTools";
 import { readNoteTool } from "./NoteTools";
@@ -14,6 +14,13 @@ import {
 } from "./TimeTools";
 import { ToolDefinition, ToolRegistry } from "./ToolRegistry";
 import { youtubeTranscriptionTool } from "./YoutubeTools";
+import {
+  analyzeNoteGraphTool,
+  findSimilarNotesTool,
+  suggestConnectionsTool,
+  graphInsightsTool,
+  enrichNoteTool,
+} from "./KnowledgeGraphTools";
 
 /**
  * Define all built-in tools with their metadata
@@ -298,6 +305,26 @@ Example usage:
 </use_tool>`,
     },
   },
+  {
+    tool: deleteNoteTool,
+    metadata: {
+      id: "deleteNote",
+      displayName: "Delete Note",
+      description: "Delete a note (file) from the vault",
+      category: "file",
+      requiresVault: true,
+      customPromptInstructions: `For deleteNote:
+- Use when user explicitly asks to delete or remove a note/file
+- Files are moved to trash, not permanently deleted
+- Always confirm the file path before deleting
+
+Example usage:
+<use_tool>
+<name>deleteNote</name>
+<path>notes/old-note.md</path>
+</use_tool>`,
+    },
+  },
 
   // Media tools
   {
@@ -314,6 +341,113 @@ Example usage:
 Example usage:
 <use_tool>
 <name>youtubeTranscription</name>
+</use_tool>`,
+    },
+  },
+
+  // Knowledge Graph tools
+  {
+    tool: analyzeNoteGraphTool,
+    metadata: {
+      id: "analyzeNoteGraph",
+      displayName: "Analyze Note Graph",
+      description: "Analyze a note's position in the knowledge graph",
+      category: "graph",
+      requiresVault: true,
+      customPromptInstructions: `For analyzeNoteGraph:
+- Use to analyze a note's connections, centrality, and position in the graph
+- Provides incoming/outgoing links, tags, and graph metrics
+
+Example usage:
+<use_tool>
+<name>analyzeNoteGraph</name>
+<notePath>path/to/note.md</notePath>
+</use_tool>`,
+    },
+  },
+  {
+    tool: findSimilarNotesTool,
+    metadata: {
+      id: "findSimilarNotes",
+      displayName: "Find Similar Notes",
+      description: "Find notes similar to a given note",
+      category: "graph",
+      requiresVault: true,
+      customPromptInstructions: `For findSimilarNotes:
+- Finds notes with shared tags and link patterns
+- Useful for discovering related content
+
+Example usage:
+<use_tool>
+<name>findSimilarNotes</name>
+<notePath>path/to/note.md</notePath>
+<maxResults>10</maxResults>
+</use_tool>`,
+    },
+  },
+  {
+    tool: suggestConnectionsTool,
+    metadata: {
+      id: "suggestConnections",
+      displayName: "Suggest Connections",
+      description: "Suggest potential connections for a note",
+      category: "graph",
+      requiresVault: true,
+      customPromptInstructions: `For suggestConnections:
+- Suggests notes that could be linked based on similarity
+- Excludes already linked notes
+
+Example usage:
+<use_tool>
+<name>suggestConnections</name>
+<notePath>path/to/note.md</notePath>
+<maxSuggestions>10</maxSuggestions>
+</use_tool>`,
+    },
+  },
+  {
+    tool: graphInsightsTool,
+    metadata: {
+      id: "graphInsights",
+      displayName: "Graph Insights",
+      description: "Generate insights about the entire knowledge graph",
+      category: "graph",
+      requiresVault: true,
+      customPromptInstructions: `For graphInsights:
+- Analyzes the entire graph structure
+- Can focus on overview, hubs, orphans, or clusters
+
+Example usage (overview):
+<use_tool>
+<name>graphInsights</name>
+<analysisType>overview</analysisType>
+</use_tool>
+
+Example usage (find hubs):
+<use_tool>
+<name>graphInsights</name>
+<analysisType>hubs</analysisType>
+</use_tool>`,
+    },
+  },
+  {
+    tool: enrichNoteTool,
+    metadata: {
+      id: "enrichNote",
+      displayName: "Enrich Note",
+      description: "Prepare note enrichment data for LLM suggestions",
+      category: "graph",
+      requiresVault: true,
+      customPromptInstructions: `For enrichNote:
+- Prepares data for LLM to suggest tags and links
+- Returns note content, existing tags, and similar notes
+
+Example usage:
+<use_tool>
+<name>enrichNote</name>
+<notePath>path/to/note.md</notePath>
+<suggestTags>true</suggestTags>
+<suggestLinks>true</suggestLinks>
 </use_tool>`,
     },
   },

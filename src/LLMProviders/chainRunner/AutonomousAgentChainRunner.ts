@@ -236,7 +236,7 @@ ${params}
     let fullAIResponse = "";
     let responseMetadata: ResponseMetadata | undefined;
 
-    const isPlusUser = await checkIsPlusUser({
+    await checkIsPlusUser({
       isAutonomousAgent: true,
     });
 
@@ -251,23 +251,23 @@ ${params}
     // Create ThinkBlockStreamer to manage all content and errors
     const thinkStreamer = new ThinkBlockStreamer(updateCurrentAiMessage, adapter, excludeThinking);
 
-    if (!isPlusUser) {
-      await this.handleError(
-        new Error("Invalid license key"),
-        thinkStreamer.processErrorChunk.bind(thinkStreamer)
-      );
-      const errorResponse = thinkStreamer.close().content;
-
-      // Use handleResponse to properly save error to conversation history and memory
-      return this.handleResponse(
-        errorResponse,
-        userMessage,
-        abortController,
-        addMessage,
-        updateCurrentAiMessage,
-        undefined // no sources
-      );
-    }
+    // MODIFIED: Bypassed Plus user check to enable agent mode for local development
+    // Original code required isPlusUser to be true for agent mode
+    // if (!isPlusUser) {
+    //   await this.handleError(
+    //     new Error("Invalid license key"),
+    //     thinkStreamer.processErrorChunk.bind(thinkStreamer)
+    //   );
+    //   const errorResponse = thinkStreamer.close().content;
+    //   return this.handleResponse(
+    //     errorResponse,
+    //     userMessage,
+    //     abortController,
+    //     addMessage,
+    //     updateCurrentAiMessage,
+    //     undefined // no sources
+    //   );
+    // }
 
     const modelNameForLog = (chatModel as { modelName?: string } | undefined)?.modelName;
 

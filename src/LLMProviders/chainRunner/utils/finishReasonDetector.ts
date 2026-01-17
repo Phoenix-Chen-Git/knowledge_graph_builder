@@ -115,5 +115,14 @@ export function extractTokenUsage(chunk: any): {
     };
   }
 
+  // Google Gemini format: usageMetadata in response_metadata
+  if (metadata.usageMetadata) {
+    return {
+      inputTokens: metadata.usageMetadata.promptTokenCount,
+      outputTokens: metadata.usageMetadata.candidatesTokenCount,
+      totalTokens: metadata.usageMetadata.totalTokenCount,
+    };
+  }
+
   return null;
 }
