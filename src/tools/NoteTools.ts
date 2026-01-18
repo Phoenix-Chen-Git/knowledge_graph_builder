@@ -2,6 +2,8 @@ import { TFile } from "obsidian";
 import { z } from "zod";
 import { logInfo, logWarn } from "@/logger";
 import { createTool } from "./SimpleTool";
+import { BrevilabsClient } from "@/LLMProviders/brevilabsClient";
+import { FileParserManager } from "./FileParserManager";
 
 const LINES_PER_CHUNK = 200;
 
@@ -217,6 +219,13 @@ async function resolveNoteFile(notePath: string): Promise<ResolveNoteOutcome> {
 
 async function readNoteText(file: TFile): Promise<string> {
   try {
+    // Handle PDF files using FileParserManager with local extraction
+    if (file.extension === "pdf") {
+      logInfo(`readNote: parsing PDF file ${file.path}`);
+      const fileParserManager = new FileParserManager(BrevilabsClient.getInstance(), app.vault);
+      return await fileParserManager.parseFile(file, app.vault);
+    }
+    // Handle regular text files
     return await app.vault.cachedRead(file);
   } catch (error) {
     logWarn(`readNote: failed to read ${file.path}`, error);

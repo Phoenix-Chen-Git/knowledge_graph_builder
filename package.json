@@ -140,6 +140,9 @@
     "minisearch": "^7.2.0",
     "next-i18next": "^13.2.2",
     "p-queue": "^8.1.0",
+    "pdf-parse": "^1.1.1",
+    "pdf2json": "^4.0.2",
+    "pdfjs-dist": "^5.4.530",
     "prop-types": "^15.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -151,6 +154,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "trie-search": "^2.2.0",
-    "turndown": "^7.2.2"
+    "turndown": "^7.2.2",
+    "unpdf": "^1.4.0"
   }
 }

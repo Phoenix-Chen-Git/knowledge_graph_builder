@@ -7,6 +7,9 @@ import { extractRetryTime, isRateLimitError } from "@/utils/rateLimitUtils";
 import { Notice, TFile, Vault } from "obsidian";
 import { CanvasLoader } from "./CanvasLoader";
 
+// Import unpdf for PDF text extraction (works in Node/Electron without web workers)
+import { extractText } from "unpdf";
+
 interface FileParser {
   supportedExtensions: string[];
   parseFile: (file: TFile, vault: Vault) => Promise<string>;
@@ -30,6 +33,25 @@ export class PDFParser implements FileParser {
     this.pdfCache = PDFCache.getInstance();
   }
 
+  /**
+   * Extract text from PDF using unpdf (local, no API required)
+   */
+  private async extractTextLocally(binaryContent: ArrayBuffer): Promise<string> {
+    try {
+      // Convert ArrayBuffer to Uint8Array for unpdf
+      const uint8Array = new Uint8Array(binaryContent);
+      const result = await extractText(uint8Array);
+
+      // unpdf returns text as string[] (one per page), join them
+      const fullText = Array.isArray(result.text) ? result.text.join("\n\n") : String(result.text);
+      logInfo(`unpdf extracted ${fullText.length} chars from ${result.totalPages} pages`);
+      return fullText;
+    } catch (error) {
+      logError("Local PDF extraction (unpdf) failed:", error);
+      throw error;
+    }
+  }
+
   async parseFile(file: TFile, vault: Vault): Promise<string> {
     try {
       logInfo("Parsing PDF file:", file.path);
@@ -41,12 +63,35 @@ export class PDFParser implements FileParser {
         return cachedResponse.response;
       }
 
-      // If not in cache, read the file and call the API
+      // Read the file binary content
       const binaryContent = await vault.readBinary(file);
-      logInfo("Calling pdf4llm API for:", file.path);
-      const pdf4llmResponse = await this.brevilabsClient.pdf4llm(binaryContent);
-      await this.pdfCache.set(file, pdf4llmResponse);
-      return pdf4llmResponse.response;
+
+      // Try local extraction first (no API key required)
+      try {
+        logInfo("Attempting local PDF extraction for:", file.path);
+        const localText = await this.extractTextLocally(binaryContent);
+
+        // Check if we got meaningful content
+        if (localText && localText.trim().length > 50) {
+          logInfo("Local PDF extraction successful for:", file.path);
+          await this.pdfCache.set(file, { response: localText, elapsed_time_ms: 0 });
+          return localText;
+        }
+        logInfo("Local extraction returned minimal content, trying API fallback");
+      } catch (localError) {
+        logInfo("Local PDF extraction failed, trying API fallback:", localError);
+      }
+
+      // Fallback to Brevilabs API
+      try {
+        logInfo("Calling pdf4llm API for:", file.path);
+        const pdf4llmResponse = await this.brevilabsClient.pdf4llm(binaryContent);
+        await this.pdfCache.set(file, pdf4llmResponse);
+        return pdf4llmResponse.response;
+      } catch (apiError) {
+        logError(`API fallback also failed for ${file.path}:`, apiError);
+        return `[Error: Could not extract content from PDF ${file.basename}]`;
+      }
     } catch (error) {
       logError(`Error extracting content from PDF ${file.path}:`, error);
       return `[Error: Could not extract content from PDF ${file.basename}]`;
