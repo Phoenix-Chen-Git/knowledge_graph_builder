@@ -18,7 +18,7 @@ const PARAM_RANGES = {
   temperature: { min: 0, max: 2, step: 0.01, default: DEFAULT_MODEL_SETTING.TEMPERATURE },
   topP: { min: 0, max: 1, step: 0.05, default: 0.9 },
   frequencyPenalty: { min: 0, max: 2, step: 0.05, default: 0 },
-  maxTokens: { min: 100, max: 128000, step: 100, default: DEFAULT_MODEL_SETTING.MAX_TOKENS },
+  maxTokens: { min: 100, max: 65536, step: 1000, default: DEFAULT_MODEL_SETTING.MAX_TOKENS },
 };
 
 interface ModelParametersEditorProps {

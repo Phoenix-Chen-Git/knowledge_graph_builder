@@ -1,9 +1,17 @@
 import { getSettings } from "@/settings/model";
 import { Vault } from "obsidian";
-import { replaceInFileTool, writeToFileTool, deleteNoteTool } from "./ComposerTools";
+import {
+  replaceInFileTool,
+  writeToFileTool,
+  deleteNoteTool,
+  moveNoteTool,
+  listRecentFileOperationsTool,
+  undoFileOperationTool,
+} from "./ComposerTools";
 import { createGetFileTreeTool } from "./FileTreeTools";
 import { updateMemoryTool } from "./memoryTools";
 import { readNoteTool } from "./NoteTools";
+import { paperToKnowledgeGraphTool } from "./PaperTools";
 import { localSearchTool, webSearchTool } from "./SearchTools";
 import { createGetTagListTool } from "./TagTools";
 import {
@@ -316,12 +324,83 @@ Example usage:
       customPromptInstructions: `For deleteNote:
 - Use when user explicitly asks to delete or remove a note/file
 - Files are moved to trash, not permanently deleted
+- A git backup commit is created before deletion (if vault is git repo)
 - Always confirm the file path before deleting
 
 Example usage:
 <use_tool>
 <name>deleteNote</name>
 <path>notes/old-note.md</path>
+</use_tool>`,
+    },
+  },
+  {
+    tool: moveNoteTool,
+    metadata: {
+      id: "moveNote",
+      displayName: "Move Note",
+      description: "Move or rename a note (file) in the vault",
+      category: "file",
+      requiresVault: true,
+      customPromptInstructions: `For moveNote:
+- Use when user asks to move, rename, or reorganize files
+- All internal links are automatically updated
+- A git backup commit is created before the move (if vault is git repo)
+- Use getFileTree to find exact paths first
+
+Example - move to folder:
+<use_tool>
+<name>moveNote</name>
+<sourcePath>notes/document.md</sourcePath>
+<destinationPath>archive/2024/document.md</destinationPath>
+</use_tool>
+
+Example - rename:
+<use_tool>
+<name>moveNote</name>
+<sourcePath>notes/old-name.md</sourcePath>
+<destinationPath>notes/new-name.md</destinationPath>
+</use_tool>`,
+    },
+  },
+  {
+    tool: listRecentFileOperationsTool,
+    metadata: {
+      id: "listRecentFileOperations",
+      displayName: "List Recent File Operations",
+      description: "Show recent delete/move operations from git history",
+      category: "file",
+      requiresVault: true,
+      customPromptInstructions: `For listRecentFileOperations:
+- Use when user asks about recent file operations, deleted files, or wants to undo something
+- Shows [Auto-backup] commits that can be recovered
+- Returns commit hash, file path, and time for each operation
+
+Example usage:
+<use_tool>
+<name>listRecentFileOperations</name>
+<limit>5</limit>
+</use_tool>`,
+    },
+  },
+  {
+    tool: undoFileOperationTool,
+    metadata: {
+      id: "undoFileOperation",
+      displayName: "Undo File Operation",
+      description: "Recover a deleted or moved file from git history",
+      category: "file",
+      requiresVault: true,
+      customPromptInstructions: `For undoFileOperation:
+- Always call listRecentFileOperations FIRST to get the commit hash and file path
+- Use to recover deleted files or restore moved files to original location
+- Files are recovered from the state BEFORE the operation
+
+Example usage:
+<use_tool>
+<name>undoFileOperation</name>
+<commitHash>abc123</commitHash>
+<filePath>notes/deleted-note.md</filePath>
 </use_tool>`,
     },
   },
@@ -346,6 +425,32 @@ Example usage:
   },
 
   // Knowledge Graph tools
+  {
+    tool: paperToKnowledgeGraphTool,
+    metadata: {
+      id: "paperToKnowledgeGraph",
+      displayName: "Paper to Knowledge Graph",
+      description: "Convert a PDF paper into atomic notes and a canvas visualization",
+      category: "graph",
+      requiresVault: true,
+      customPromptInstructions: `For paperToKnowledgeGraph:
+- Use when user wants to convert a paper/PDF into notes
+- Extracts key concepts and creates one note per concept
+- Creates a canvas showing relationships between concepts
+- Follow atomic knowledge principles: one idea per note
+
+After calling this tool, you MUST:
+1. Read the extracted paper text
+2. Create atomic notes for each key concept using writeToFile
+3. Create a canvas file showing relationships
+
+Example usage:
+<use_tool>
+<name>paperToKnowledgeGraph</name>
+<paperPath>papers/my-paper.pdf</paperPath>
+</use_tool>`,
+    },
+  },
   {
     tool: analyzeNoteGraphTool,
     metadata: {

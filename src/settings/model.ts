@@ -371,8 +371,8 @@ export function sanitizeSettings(settings: CopilotSettings): CopilotSettings {
   const autonomousAgentMaxIterations = Number(settingsToSanitize.autonomousAgentMaxIterations);
   if (
     isNaN(autonomousAgentMaxIterations) ||
-    autonomousAgentMaxIterations < 4 ||
-    autonomousAgentMaxIterations > 8
+    autonomousAgentMaxIterations < 1 ||
+    autonomousAgentMaxIterations > 100
   ) {
     sanitizedSettings.autonomousAgentMaxIterations = DEFAULT_SETTINGS.autonomousAgentMaxIterations;
   } else {

@@ -18,6 +18,8 @@ export const DEFAULT_MEMORY_FOLDER = `${COPILOT_FOLDER_ROOT}/memory`;
 export const DEFAULT_SYSTEM_PROMPTS_FOLDER = `${COPILOT_FOLDER_ROOT}/system-prompts`;
 export const DEFAULT_QA_EXCLUSIONS_SETTING = COPILOT_FOLDER_ROOT;
 export const DEFAULT_SYSTEM_PROMPT = `You are Obsidian Copilot, a helpful assistant that integrates AI to Obsidian note-taking.
+
+## Core Principles
   1. Never mention that you do not have access to something. Always rely on the user provided context.
   2. Always answer to the best of your knowledge. If you are unsure about something, say so and ask the user to provide more context.
   3. If the user mentions "note", it most likely means an Obsidian note in the vault, not the generic meaning of a note.
@@ -32,71 +34,80 @@ export const DEFAULT_SYSTEM_PROMPT = `You are Obsidian Copilot, a helpful assist
   12. Do NOT mention the additional context provided such as getCurrentTime and getTimeRangeMs if it's irrelevant to the user message.
   13. If the user mentions "tags", it most likely means tags in Obsidian note properties.
   14. YouTube URLs: If the user provides YouTube URLs in their message, transcriptions will be automatically fetched and provided to you. You don't need to do anything special - just use the transcription content if available.
-  15. For markdown lists, always use '- ' (hyphen followed by exactly one space) for bullet points, with no leading spaces before the hyphen. Never use '*' (asterisk) for bullets.`;
+  15. For markdown lists, always use '- ' (hyphen followed by exactly one space) for bullet points, with no leading spaces before the hyphen. Never use '*' (asterisk) for bullets.
+
+## Atomic Knowledge Principles
+When creating or editing notes and canvases, follow these principles for building a knowledge graph:
+  16. **Decompose, don't combine**: Break complex concepts into minimal logic units. Each note should represent ONE atomic concept or idea.
+  17. **Minimal nodes**: Prefer creating multiple small, focused notes over one large note. Each note = one idea, one definition, one concept.
+  18. **Clear links**: Always create explicit links [[like this]] between related concepts. The connections between nodes are as important as the nodes themselves.
+  19. **Canvas decomposition**: When creating canvas diagrams, use separate nodes for each concept with explicit edges showing relationships. Never combine multiple concepts into a single node.
+  20. **Logic-first structure**: Organize by logical relationships (cause→effect, premise→conclusion, general→specific) rather than chronological or arbitrary groupings.
+  21. **Naming clarity**: Node/note titles should be clear, specific, and self-explanatory. Use descriptive names that capture the essence of the single concept.`;
 
 export const COMPOSER_OUTPUT_INSTRUCTIONS = `Return the new note content or canvas JSON in <writeToFile> tags.
 
   # Steps to find the the target notes
-  1. Extract the target note information from user message and find out the note path from the context below.
-  2. If target note is not specified, use the <active_note> as the target note.
+1. Extract the target note information from user message and find out the note path from the context below.
+  2. If target note is not specified, use the<active_note> as the target note.
   3. If still failed to find the target note or the note path, ask the user to specify the target note.
 
   # Examples
 
-  Input: Add a new section to note A
-  Output:
-  <writeToFile>
-  <path>path/to/file.md</path>
-  <content>The FULL CONTENT of the note A with added section goes here</content>
-  </writeToFile>
+Input: Add a new section to note A
+Output:
+<writeToFile>
+  <path>path / to / file.md </path>
+  < content > The FULL CONTENT of the note A with added section goes here </content>
+    </writeToFile>
 
-  Input: Create a new canvas with "Hello, world!"
+Input: Create a new canvas with "Hello, world!"
   Output:
-  <writeToFile>
-  <path>path/to/file.canvas</path>
+<writeToFile>
+  <path>path / to / file.canvas </path>
   <content>
-  {
-    "nodes": [
-      {
-        "id": "1",
-        "type": "text",
-        "text": "Hello, world!",
-        "x": 0,
-        "y": 0,
-        "width": 200,
-        "height": 50
-      }
-    ],
+{
+  "nodes": [
+    {
+      "id": "1",
+      "type": "text",
+      "text": "Hello, world!",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 50
+    }
+  ],
     "edges": []
-  }
-  </content>
+}
+</content>
   </writeToFile>
 
-  Input: Create a canvas with a file node and a group
-  Output:
-  <writeToFile>
-  <path>path/to/file.canvas</path>
+Input: Create a canvas with a file node and a group
+Output:
+<writeToFile>
+  <path>path / to / file.canvas </path>
   <content>
-  {
-    "nodes": [
-      {"id": "1", "type": "file", "file": "note.md", "subpath": "#heading", "x": 100, "y": 100, "width": 300, "height": 200, "color": "2"},
-      {"id": "2", "type": "group", "label": "My Group", "x": 50, "y": 50, "width": 400, "height": 300, "color": "1"},
-      {"id": "3", "type": "link", "url": "https://example.com", "x": 500, "y": 100, "width": 200, "height": 100, "color": "#FF5733"}
-    ],
+{
+  "nodes": [
+    { "id": "1", "type": "file", "file": "note.md", "subpath": "#heading", "x": 100, "y": 100, "width": 300, "height": 200, "color": "2" },
+    { "id": "2", "type": "group", "label": "My Group", "x": 50, "y": 50, "width": 400, "height": 300, "color": "1" },
+    { "id": "3", "type": "link", "url": "https://example.com", "x": 500, "y": 100, "width": 200, "height": 100, "color": "#FF5733" }
+  ],
     "edges": [
-      {"id": "e1-2", "fromNode": "1", "toNode": "3", "fromSide": "right", "toSide": "left", "fromEnd": "arrow", "toEnd": "none", "color": "3", "label": "references"}
+      { "id": "e1-2", "fromNode": "1", "toNode": "3", "fromSide": "right", "toSide": "left", "fromEnd": "arrow", "toEnd": "none", "color": "3", "label": "references" }
     ]
-  }
-  </content>
+}
+</content>
   </writeToFile>
 
-  # Canvas JSON Format (JSON Canvas spec 1.0)
+  # Canvas JSON Format(JSON Canvas spec 1.0)
   Required node fields: id, type, x, y, width, height
-  Node types: "text" (needs text), "file" (needs file), "link" (needs url), "group" (optional label)
-  Optional node fields: color (hex #FF0000 or preset "1"-"6"), subpath (file nodes, starts with #)
+  Node types: "text"(needs text), "file"(needs file), "link"(needs url), "group"(optional label)
+  Optional node fields: color(hex #FF0000 or preset "1" - "6"), subpath(file nodes, starts with #)
   Required edge fields: id, fromNode, toNode
-  Optional edge fields: fromSide/toSide ("top"/"right"/"bottom"/"left"), fromEnd/toEnd ("none"/"arrow"), color, label
-  All IDs must be unique. Edge nodes must reference existing node IDs.
+  Optional edge fields: fromSide / toSide("top" / "right" / "bottom" / "left"), fromEnd / toEnd("none" / "arrow"), color, label
+  All IDs must be unique.Edge nodes must reference existing node IDs.
   Position nodes with reasonable spacing and logical visual flow.
   `;
 
@@ -156,7 +167,7 @@ export enum Verbosity {
 }
 
 export const DEFAULT_MODEL_SETTING = {
-  MAX_TOKENS: 6000,
+  MAX_TOKENS: 65000,
   TEMPERATURE: 0.1,
   REASONING_EFFORT: ReasoningEffort.LOW,
   VERBOSITY: Verbosity.MEDIUM,
@@ -470,7 +481,7 @@ export interface ProviderMetadata {
   host: string;
   /**
    * Base URL used when generating example curl commands (and UI placeholders).
-   * This must be deterministic and must NOT include endpoint suffixes like `/chat/completions`.
+   * This must be deterministic and must NOT include endpoint suffixes like `/ chat / completions`.
    * It intentionally does not affect runtime SDK configuration.
    */
   curlBaseURL: string;
@@ -805,7 +816,7 @@ export const DEFAULT_SETTINGS: CopilotSettings = {
   enableSemanticSearchV3: false,
   enableLexicalBoosts: true,
   suggestedDefaultCommands: false,
-  autonomousAgentMaxIterations: 4,
+  autonomousAgentMaxIterations: 50,
   autonomousAgentEnabledToolIds: [
     "localSearch",
     "readNote",

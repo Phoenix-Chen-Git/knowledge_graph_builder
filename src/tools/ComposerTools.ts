@@ -6,6 +6,47 @@ import { z } from "zod";
 import { createTool } from "./SimpleTool";
 import { ensureFolderExists } from "@/utils";
 import { getSettings } from "@/settings/model";
+import { logInfo, logError } from "@/logger";
+
+// Use require for Node built-ins (available in Electron)
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { exec } = require("child_process");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { promisify } = require("util");
+const execAsync = promisify(exec);
+
+/**
+ * Creates an automatic git commit before a risky file operation.
+ * This allows users to recover from accidental deletions or moves.
+ * @param vaultPath - The absolute path to the vault
+ * @param action - Description of the action being performed
+ * @returns true if commit was created, false if not a git repo or failed
+ */
+async function gitCommitBeforeRiskyAction(vaultPath: string, action: string): Promise<boolean> {
+  try {
+    // Check if vault is a git repo
+    await execAsync("git rev-parse --is-inside-work-tree", { cwd: vaultPath });
+
+    // Stage all changes and create commit
+    const commitMessage = `[Auto-backup] ${action}`;
+    await execAsync(`git add -A && git commit -m "${commitMessage}" --allow-empty`, {
+      cwd: vaultPath,
+    });
+
+    logInfo(`Git auto-commit created: ${commitMessage}`);
+    return true;
+  } catch (error: any) {
+    // Not a git repo or git command failed - this is fine, just skip
+    if (error?.message?.includes("not a git repository")) {
+      logInfo("Vault is not a git repository, skipping auto-commit");
+    } else if (error?.message?.includes("nothing to commit")) {
+      logInfo("No changes to commit before action");
+    } else {
+      logError("Git auto-commit failed:", error);
+    }
+    return false;
+  }
+}
 
 async function getFile(file_path: string): Promise<TFile> {
   let file = app.vault.getAbstractFileByPath(file_path);
@@ -444,7 +485,7 @@ const deleteNoteSchema = z.object({
 
 const deleteNoteTool = createTool({
   name: "deleteNote",
-  description: `Delete a note (file) from the vault. Use this tool when the user explicitly asks to delete or remove a note/file.`,
+  description: `Delete a note (file) from the vault. Use this tool when the user explicitly asks to delete or remove a note/file. Creates an automatic git backup commit before deletion if the vault is a git repository.`,
   schema: deleteNoteSchema,
   handler: async ({ path, confirmation = true }) => {
     const file = app.vault.getAbstractFileByPath(path);
@@ -456,44 +497,267 @@ const deleteNoteTool = createTool({
       });
     }
 
-    // For now, always require confirmation for safety
-    if (confirmation) {
-      // In a real implementation, you'd show a confirmation dialog
-      // For agent mode, we'll proceed with a warning
-      try {
-        await app.vault.trash(file, true); // Move to trash instead of permanent delete
-        return JSON.stringify({
-          success: true,
-          message: `File "${path}" has been moved to trash. You can restore it from Obsidian's .trash folder if needed.`,
-        });
-      } catch (error: any) {
-        return JSON.stringify({
-          success: false,
-          message: `Error deleting file: ${error?.message || error}`,
-        });
-      }
-    } else {
-      try {
-        await app.vault.trash(file, true);
-        return JSON.stringify({
-          success: true,
-          message: `File "${path}" has been moved to trash.`,
-        });
-      } catch (error: any) {
-        return JSON.stringify({
-          success: false,
-          message: `Error deleting file: ${error?.message || error}`,
-        });
-      }
+    try {
+      // Create git backup before deletion
+      const vaultPath = (app.vault.adapter as any).basePath;
+      const gitBackup = await gitCommitBeforeRiskyAction(vaultPath, `Before deleting: ${path}`);
+
+      await app.vault.trash(file, true); // Move to trash instead of permanent delete
+
+      const gitMessage = gitBackup ? " A git backup was created before deletion." : "";
+
+      return JSON.stringify({
+        success: true,
+        gitBackup,
+        message: `File "${path}" has been moved to trash.${gitMessage} You can restore it from Obsidian's .trash folder or use git to recover.`,
+      });
+    } catch (error: any) {
+      return JSON.stringify({
+        success: false,
+        message: `Error deleting file: ${error?.message || error}`,
+      });
     }
   },
-  timeoutMs: 5000,
+  timeoutMs: 10000,
+});
+
+// Move/Rename note schema and tool
+const moveNoteSchema = z.object({
+  sourcePath: z
+    .string()
+    .describe(
+      `(Required) The current path of the file to move (relative to the root of the vault, including file extension like .md)`
+    ),
+  destinationPath: z
+    .string()
+    .describe(
+      `(Required) The new path for the file (relative to the root of the vault, including file extension). Can be in a different folder or just a rename in the same folder.`
+    ),
+});
+
+const moveNoteTool = createTool({
+  name: "moveNote",
+  description: `Move or rename a note (file) in the vault. Use this tool when the user asks to move, rename, or reorganize files. This tool automatically updates all internal links pointing to the moved file. Creates an automatic git backup commit before the move if the vault is a git repository.`,
+  schema: moveNoteSchema,
+  handler: async ({ sourcePath, destinationPath }) => {
+    const file = app.vault.getAbstractFileByPath(sourcePath);
+
+    if (!file || !(file instanceof TFile)) {
+      return JSON.stringify({
+        success: false,
+        message: `Source file not found at path: ${sourcePath}. Please check the file path and try again.`,
+      });
+    }
+
+    // Check if destination already exists
+    const existingFile = app.vault.getAbstractFileByPath(destinationPath);
+    if (existingFile) {
+      return JSON.stringify({
+        success: false,
+        message: `Destination path "${destinationPath}" already exists. Please choose a different destination.`,
+      });
+    }
+
+    try {
+      // Ensure destination folder exists
+      const destFolder = destinationPath.includes("/")
+        ? destinationPath.split("/").slice(0, -1).join("/")
+        : "";
+      if (destFolder) {
+        await ensureFolderExists(destFolder);
+      }
+
+      // Create git backup before move
+      const vaultPath = (app.vault.adapter as any).basePath;
+      const gitBackup = await gitCommitBeforeRiskyAction(
+        vaultPath,
+        `Before moving: ${sourcePath} -> ${destinationPath}`
+      );
+
+      // Use fileManager.renameFile which updates all links
+      await app.fileManager.renameFile(file, destinationPath);
+
+      const gitMessage = gitBackup ? " A git backup was created before the move." : "";
+
+      return JSON.stringify({
+        success: true,
+        gitBackup,
+        oldPath: sourcePath,
+        newPath: destinationPath,
+        message: `File moved from "${sourcePath}" to "${destinationPath}". All internal links have been updated.${gitMessage}`,
+      });
+    } catch (error: any) {
+      return JSON.stringify({
+        success: false,
+        message: `Error moving file: ${error?.message || error}`,
+      });
+    }
+  },
+  timeoutMs: 10000,
+});
+
+// List recent file operations from git history
+const listRecentFileOperationsSchema = z.object({
+  limit: z
+    .number()
+    .optional()
+    .default(10)
+    .describe("Maximum number of operations to show (default: 10)"),
+});
+
+const listRecentFileOperationsTool = createTool({
+  name: "listRecentFileOperations",
+  description: `List recent file operations (delete/move) from git history. Shows [Auto-backup] commits that can be undone. Use this to find operations the user wants to undo or recover.`,
+  schema: listRecentFileOperationsSchema,
+  handler: async ({ limit = 10 }) => {
+    try {
+      const vaultPath = (app.vault.adapter as any).basePath;
+
+      // Get recent Auto-backup commits
+      const { stdout } = await execAsync(
+        `git log --oneline --grep="\\[Auto-backup\\]" -${limit} --format="%H|%ar|%s"`,
+        { cwd: vaultPath }
+      );
+
+      if (!stdout.trim()) {
+        return JSON.stringify({
+          success: true,
+          operations: [],
+          message:
+            "No recent file operations found in git history. The vault may not be a git repository or no operations have been recorded yet.",
+        });
+      }
+
+      const operations = stdout
+        .trim()
+        .split("\n")
+        .map((line: string, index: number) => {
+          const [hash, timeAgo, ...messageParts] = line.split("|");
+          const message = messageParts.join("|");
+
+          // Parse action type and file path from message
+          let actionType = "unknown";
+          let filePath = "";
+          let destPath = "";
+
+          if (message.includes("Before deleting:")) {
+            actionType = "delete";
+            filePath = message.replace("[Auto-backup] Before deleting: ", "").trim();
+          } else if (message.includes("Before moving:")) {
+            actionType = "move";
+            const paths = message.replace("[Auto-backup] Before moving: ", "").trim();
+            const [src, dst] = paths.split(" -> ");
+            filePath = src?.trim() || "";
+            destPath = dst?.trim() || "";
+          }
+
+          return {
+            index: index + 1,
+            hash: hash.trim(),
+            timeAgo: timeAgo.trim(),
+            actionType,
+            filePath,
+            destPath,
+            fullMessage: message,
+          };
+        });
+
+      return JSON.stringify({
+        success: true,
+        operations,
+        message: `Found ${operations.length} recent file operation(s). Use undoFileOperation with the commit hash to recover files.`,
+      });
+    } catch (error: any) {
+      if (error?.message?.includes("not a git repository")) {
+        return JSON.stringify({
+          success: false,
+          message: "This vault is not a git repository. File operation history is not available.",
+        });
+      }
+      return JSON.stringify({
+        success: false,
+        message: `Error reading git history: ${error?.message || error}`,
+      });
+    }
+  },
+  timeoutMs: 10000,
+});
+
+// Undo a file operation by recovering from git
+const undoFileOperationSchema = z.object({
+  commitHash: z
+    .string()
+    .describe("The git commit hash of the [Auto-backup] commit (from listRecentFileOperations)"),
+  filePath: z
+    .string()
+    .describe("The file path to recover (the original path before the operation)"),
+});
+
+const undoFileOperationTool = createTool({
+  name: "undoFileOperation",
+  description: `Undo a file operation by recovering a file from git history. Use listRecentFileOperations first to find the commit hash and file path. This tool recovers the file as it was BEFORE the operation was performed.`,
+  schema: undoFileOperationSchema,
+  handler: async ({ commitHash, filePath }) => {
+    try {
+      const vaultPath = (app.vault.adapter as any).basePath;
+
+      // Verify the commit exists and is an Auto-backup commit
+      const { stdout: commitInfo } = await execAsync(`git log -1 --format="%s" ${commitHash}`, {
+        cwd: vaultPath,
+      });
+
+      if (!commitInfo.includes("[Auto-backup]")) {
+        return JSON.stringify({
+          success: false,
+          message: `Commit ${commitHash} is not an [Auto-backup] commit. Please use listRecentFileOperations to find valid commits.`,
+        });
+      }
+
+      // Check if file already exists
+      const existingFile = app.vault.getAbstractFileByPath(filePath);
+      if (existingFile) {
+        return JSON.stringify({
+          success: false,
+          message: `File "${filePath}" already exists. Delete or move it first if you want to recover an older version.`,
+        });
+      }
+
+      // Recover the file from the commit (the state before the operation)
+      // We use commitHash^ to get the parent commit (before the backup was made)
+      await execAsync(`git checkout ${commitHash}^ -- "${filePath}"`, { cwd: vaultPath });
+
+      // Refresh the vault to see the recovered file
+      // Note: Obsidian may need a moment to detect the file
+
+      return JSON.stringify({
+        success: true,
+        recoveredPath: filePath,
+        fromCommit: commitHash,
+        message: `File "${filePath}" has been recovered from git history. The file has been restored to its state before the operation. You may need to refresh the file tree to see it.`,
+      });
+    } catch (error: any) {
+      if (error?.message?.includes("did not match any file")) {
+        return JSON.stringify({
+          success: false,
+          message: `File "${filePath}" was not found in git history at that commit. The file path may be incorrect.`,
+        });
+      }
+      return JSON.stringify({
+        success: false,
+        message: `Error recovering file: ${error?.message || error}`,
+      });
+    }
+  },
+  timeoutMs: 10000,
 });
 
 export {
   writeToFileTool,
   replaceInFileTool,
   deleteNoteTool,
+  moveNoteTool,
+  listRecentFileOperationsTool,
+  undoFileOperationTool,
   parseSearchReplaceBlocks,
   normalizeLineEndings,
   replaceWithLineEndingAwareness,
